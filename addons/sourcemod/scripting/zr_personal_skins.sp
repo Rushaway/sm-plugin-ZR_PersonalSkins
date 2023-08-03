@@ -45,7 +45,7 @@ public Plugin myinfo =
 	name = "[ZR] Personal Skins",
 	description = "Gives a personal human or zombie skin",
 	author = "FrozDark, maxime1907, .Rushaway, Dolly",
-	version = "1.3.0",
+	version = "1.3.1",
 	url = ""
 }
 
@@ -85,25 +85,14 @@ public void OnPluginStart()
 
 public void OnClientCookiesCached(int client)
 {
-	char cookieValue[6];
-	g_hUser.Get(client, cookieValue, sizeof(cookieValue));
-	
-	if(StrEqual(cookieValue, "true", false))
-		g_bClientDisabledSkin[client] = true;
-	else
-		g_bClientDisabledSkin[client] = false;
-		
-	g_hForced.Get(client, cookieValue, sizeof(cookieValue));
-	
-	if(StrEqual(cookieValue, "true", false))
-		g_bForceDisableSkin[client] = true;
-	else
-		g_bForceDisableSkin[client] = false;
+	ReadClientCookies(client);
 }
 
 public void OnMapEnd()
 {
 	delete g_KV;
+	g_cvZombies.IntValue = 1;
+	g_cvHumans.IntValue = 1;
 }
 
 public void OnConfigsExecuted()
@@ -193,7 +182,7 @@ public Action Command_pSkin(int client, int args)
 	
 	if(g_bForceDisableSkin[client])
 	{
-		CReplyToCommand(client, "{green}[ZR] {red}You Personal Skin is temporary disabled by an Administrator.");
+		CReplyToCommand(client, "{green}[ZR] {red}You Personal-Skin is temporary disabled by an Administrator.");
 		return Plugin_Handled;
 	}
 	
@@ -245,6 +234,10 @@ public Action Command_pSkin(int client, int args)
 			g_iClientPreviousChangeMode[client] = modeEx;
 			g_iClientChangeMode[client] = newMode;
 			CReplyToCommand(client, "{green}[ZR] {default}Your changes will be applied on next round!");
+			if (g_cvZombies.IntValue != 1)
+				CReplyToCommand(client, "{green}[ZR] {default}Tips: Personal-Skins for Zombies is disabled on this map.");
+			if (g_cvHumans.IntValue != 1)
+				CReplyToCommand(client, "{green}[ZR] {default}Tips: Personal-Skins for Humans is disabled on this map.");
 		}
 		
 		return Plugin_Handled;
@@ -262,6 +255,10 @@ public Action Command_pSkin(int client, int args)
 		g_iClientPreviousChangeMode[client] = mode;
 		g_iClientChangeMode[client] = newMode;
 		CReplyToCommand(client, "{green}[ZR] {default}Your changes will be applied on next round!");
+		if (g_cvZombies.IntValue != 1)
+			CReplyToCommand(client, "{green}[ZR] {default}Tips: Personal-Skins for Zombies is disabled on this map.");
+		if (g_cvHumans.IntValue != 1)
+			CReplyToCommand(client, "{green}[ZR] {default}Tips: Personal-Skins for Humans is disabled on this map.");
 		return Plugin_Handled;
 	}
 }
@@ -287,7 +284,7 @@ public Action Command_TogglePSkin(int client, int args)
 	
 	if(!g_bIsPlayerHasSkins[target])
 	{
-		CReplyToCommand(client, "{green}[ZR] {default}The specified target doesn't have a personal skin!");
+		CReplyToCommand(client, "{green}[ZR] {default}The specified target doesn't have a Personal-Skin!");
 		return Plugin_Handled;
 	}
 	
@@ -306,14 +303,14 @@ public Action Command_TogglePSkin(int client, int args)
 		
 	if(g_bForceDisableSkin[target] == bValue)
 	{
-		CReplyToCommand(client, "{green}[ZR] {default}The specified target's personal skin is already %s.", (bValue) ? "{red}disabled" : "{green}enabled");
+		CReplyToCommand(client, "{green}[ZR] {default}The specified target's Personal-Skin is already %s.", (bValue) ? "{red}disabled" : "{green}enabled");
 		return Plugin_Handled;
 	}
 	
 	g_bForceDisableSkin[target] = bValue;
 	g_hForced.Set(client, "true");
-	CReplyToCommand(client, "{green}[ZR] {red}Successfully %s {default}Personal Skin on {olive}%N.", (bValue) ? "{red}disabled" : "{green}enabled", target);
-	LogAction(client, target, "[ZR-PersonalSkin] \"%L\" Force-%s \"%L\"'s personal skin", client, (bValue) ? "Disabled" : "Enabled", target);
+	CReplyToCommand(client, "{green}[ZR] {red}Successfully %s {default}Personal-Skin on {olive}%N.", (bValue) ? "{red}disabled" : "{green}enabled", target);
+	LogAction(client, target, "[ZR-PersonalSkin] \"%L\" Force-%s \"%L\"'s Personal-Skin", client, (bValue) ? "Disabled" : "Enabled", target);
 	return Plugin_Handled;
 }
 
@@ -365,15 +362,36 @@ public Action PlayerSpawn_Timer(Handle timer, int userid)
 	int previousMode = g_iClientPreviousChangeMode[client];
 	int currentMode = g_iClientChangeMode[client];
 	
-	if(previousMode == CHANGE_MODE_CHANGED && currentMode == CHANGE_MODE_CHANGESKIN_TO_PSKIN || (previousMode == CHANGE_MODE_NOT_CHANGED_YET && currentMode == CHANGE_MODE_NOT_CHANGED_YET) && !g_bClientDisabledSkin[client])
+	char cookieValue[6];
+	g_hUser.Get(client, cookieValue, sizeof(cookieValue));
+	if(StrEqual(cookieValue, ""))
+	{
 		CreateTimer(1.0, SetClientModelTimer, userid);
+		return Plugin_Stop;
+	}
+	
+	if ((g_bClientDisabledSkin[client] == false) &&
+		(previousMode == CHANGE_MODE_NOT_CHANGED_YET && currentMode == CHANGE_MODE_NOT_CHANGED_YET) ||
+		(g_bClientDisabledSkin[client] == false) &&
+		(previousMode == CHANGE_MODE_CHANGED && currentMode == CHANGE_MODE_NOT_CHANGED_YET))
+	{
+		CreateTimer(1.0, SetClientModelTimer, userid);
+		return Plugin_Stop;
+	}
+	
+	if (previousMode == CHANGE_MODE_CHANGED &&
+		currentMode == CHANGE_MODE_CHANGESKIN_TO_PSKIN ||
+		(previousMode == CHANGE_MODE_NOT_CHANGED_YET &&
+		currentMode == CHANGE_MODE_NOT_CHANGED_YET) &&
+		!g_bClientDisabledSkin[client])
+	{
+		CreateTimer(1.0, SetClientModelTimer, userid);
+		return Plugin_Stop;
+	}
 
-	else if(previousMode == CHANGE_MODE_CHANGED && currentMode == CHANGE_MODE_CHANGESKIN_TO_ACTUAL && g_bClientDisabledSkin[client])
+	if (previousMode == CHANGE_MODE_CHANGED && currentMode == CHANGE_MODE_CHANGESKIN_TO_ACTUAL && g_bClientDisabledSkin[client])
 		return Plugin_Stop;
 	
-	else
-		return Plugin_Stop;
-		
 	if(g_bClientDisabledSkin[client])
 		return Plugin_Stop;
 		
@@ -382,8 +400,10 @@ public Action PlayerSpawn_Timer(Handle timer, int userid)
 
 void GetClientModel_Frame(int client)
 {
-	GetEntPropString(client, Prop_Data, "m_ModelName", g_sPlayerActualModel[client], PLATFORM_MAX_PATH);
+	if (IsClientInGame(client))
+		GetEntPropString(client, Prop_Data, "m_ModelName", g_sPlayerActualModel[client], PLATFORM_MAX_PATH);
 }
+
 public Action SetClientModelTimer(Handle timer, int userid)
 {
 	int client = GetClientOfUserId(userid);
@@ -412,6 +432,39 @@ public Action SetClientModelTimer(Handle timer, int userid)
 }
 
 public void OnClientPutInServer(int client)
+{
+	if (AreClientCookiesCached(client))
+		ReadClientCookies(client);
+}
+
+public void ReadClientCookies(int client)
+{
+	char buffer[32];
+	GetClientCookie(client, g_hUser, buffer, 32);
+	if (buffer[0] != '\0')
+		g_bClientDisabledSkin[client] = view_as<bool>(StringToInt(buffer));
+	else
+		g_bClientDisabledSkin[client] = false;
+
+	GetClientCookie(client, g_hForced, buffer, 32);
+	if (buffer[0] != '\0')
+		g_bForceDisableSkin[client] = view_as<bool>(StringToInt(buffer));
+	else
+		g_bForceDisableSkin[client] = false;
+}
+
+public void SetClientCookies(int client)
+{
+	char sValue[8];
+
+	Format(sValue, sizeof(sValue), "%i", g_bClientDisabledSkin[client]);
+	SetClientCookie(client, g_hUser, sValue);
+
+	Format(sValue, sizeof(sValue), "%i", g_bForceDisableSkin[client]);
+	SetClientCookie(client, g_hForced, sValue);
+}
+
+public void OnClientPostAdminCheck(int client)
 {
 	if (!client || IsClientSourceTV(client) || IsFakeClient(client))
 		return;
@@ -457,6 +510,8 @@ public void OnClientDisconnect(int client)
 	g_iClientChangeMode[client] = CHANGE_MODE_NOT_CHANGED_YET;
 	g_bClientChangedSkin[client] = false;
 	g_bForceDisableSkin[client] = false;
+
+	SetClientCookies(client);
 }
 
 stock void ClearKV(KeyValues kvHandle)
